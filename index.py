@@ -1,4 +1,3 @@
-
 import requests , os , psutil , sys , jwt , pickle , json , binascii , time , urllib3 , base64 , datetime , re , socket , threading , ssl , pytz , aiohttp
 from protobuf_decoder.protobuf_decoder import Parser
 from xC4 import * ; from xHeaders import *
@@ -540,40 +539,68 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
 
 
                     if response:
+                        # /5 command: allow in squad (chat_type==0) and clan (chat_type==1); handle private separately
                         if inPuTMsG.startswith(("/5")):
                             try:
-                                dd = chatdata['5']['data']['16']
-                                print('msg in private')
-                                message = f"[B][C][000000]❄️Done\n\n"
-                                P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
-                                await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
-                                PAc = await OpEnSq(key , iv,region)
-                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
-                                C = await cHSq(5, uid ,key, iv,region)
-                                await asyncio.sleep(0.5)
-                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
-                                V = await SEnd_InV(5 , uid , key , iv,region)
-                                await asyncio.sleep(0.5)
-                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
-                                E = await ExiT(None , key , iv)
-                                await asyncio.sleep(3)
-                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
-                            except:
-                                print('msg in squad')
+                                if response.Data.chat_type == 2:
+                                    # private: existing private behaviour
+                                    dd = chatdata.get('5', {}).get('data', {}).get('16')
+                                    print('msg in private')
+                                    message = f"[B][C][000000]❄️Done\n\n"
+                                    P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
+                                    PAc = await OpEnSq(key , iv,region)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
+                                    C = await cHSq(5, uid ,key, iv,region)
+                                    await asyncio.sleep(0.5)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
+                                    V = await SEnd_InV(5 , uid , key , iv,region)
+                                    await asyncio.sleep(0.5)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
+                                    E = await ExiT(None , key , iv)
+                                    await asyncio.sleep(3)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
+                                else:
+                                    # group (squad or clan): treat same as squad behaviour (if any different, adjust here)
+                                    print('msg in group (squad/clan)')
+                                    # If original code had different squad behavior, incorporate here. For now, reuse private flow.
+                                    message = f"[B][C][000000]❄️Done\n\n"
+                                    P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
+                                    PAc = await OpEnSq(key , iv,region)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
+                                    C = await cHSq(5, uid ,key, iv,region)
+                                    await asyncio.sleep(0.5)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
+                                    V = await SEnd_InV(5 , uid , key , iv,region)
+                                    await asyncio.sleep(0.5)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
+                                    E = await ExiT(None , key , iv)
+                                    await asyncio.sleep(3)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
+                            except Exception as e:
+                                print('Error handling /5:', e)
 
 
 
+                        # /x/ invite code: allow in clan & squad (group); private handled separately (if needed)
                         if inPuTMsG.startswith('/x/'):
                             CodE = inPuTMsG.split('/x/')[1]
                             try:
-                                dd = chatdata['5']['data']['16']
-                                print('msg in private')
-                                EM = await GenJoinSquadsPacket(CodE , key , iv)
-                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
+                                if response.Data.chat_type == 2:
+                                    # private: existing behavior for private (if any)
+                                    dd = chatdata.get('5', {}).get('data', {}).get('16')
+                                    print('msg in private')
+                                    EM = await GenJoinSquadsPacket(CodE , key , iv)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
+                                else:
+                                    # group (squad/clan)
+                                    print('msg in group (squad/clan)')
+                                    EM = await GenJoinSquadsPacket(CodE , key , iv)
+                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
+                            except Exception as e:
+                                print('Error handling /x/:', e)
 
-
-                            except:
-                                print('msg in squad')
 
                         if inPuTMsG.startswith('/solo'):
                             leave = await ExiT(uid,key,iv)
@@ -583,68 +610,70 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
                             EM = await FS(key , iv)
                             await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
 
+                        # @a emote command: allow in squad (0) and clan (1), block only in private (2)
                         if inPuTMsG.strip().startswith('@a'):
 
-                            try:
-                                dd = chatdata['5']['data']['16']
+                            if response.Data.chat_type == 2:
+                                # private: inform that this command should be used in squad/clan
                                 print('msg in private')
-                                message = f"[B][C][000000]\n\nOnly In Squad ! \n\n"
+                                message = f"[B][C][000000]\n\nOnly In Squad/Clan ! \n\n"
                                 P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
                                 await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
-
-                            except:
-                                print('msg in squad')
-
-                                parts = inPuTMsG.strip().split()
-                                print(response.Data.chat_type, uid, chat_id)
-                                message = f'[B][C]{get_random_color()}\nEMOTE STARTED-> {xMsGFixinG(uid)}\n'
-
-                                P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
-
-                                uid2 = uid3 = uid4 = uid5 = None
-                                s = False
-
+                            else:
+                                # group (squad or clan): perform emote command same as previous squad logic
                                 try:
-                                    uid = int(parts[1])
-                                    uid2 = int(parts[2])
-                                    uid3 = int(parts[3])
-                                    uid4 = int(parts[4])
-                                    uid5 = int(parts[5])
-                                    idT = int(parts[5])
+                                    parts = inPuTMsG.strip().split()
+                                    print(response.Data.chat_type, uid, chat_id)
+                                    message = f'[B][C]{get_random_color()}\nEMOTE STARTED-> {xMsGFixinG(uid)}\n'
 
-                                except ValueError as ve:
-                                    print("ValueError:", ve)
-                                    s = True
+                                    P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
 
-                                except Exception:
-                                    idT = len(parts) - 1
-                                    idT = int(parts[idT])
-                                    print(idT)
-                                    print(uid)
+                                    uid2 = uid3 = uid4 = uid5 = None
+                                    s = False
 
-                                if not s:
                                     try:
-                                        await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+                                        uid = int(parts[1])
+                                        uid2 = int(parts[2])
+                                        uid3 = int(parts[3])
+                                        uid4 = int(parts[4])
+                                        uid5 = int(parts[5])
+                                        idT = int(parts[5])
 
-                                        H = await Emote_k(uid, idT, key, iv,region)
-                                        await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                    except ValueError as ve:
+                                        print("ValueError:", ve)
+                                        s = True
 
-                                        if uid2:
-                                            H = await Emote_k(uid2, idT, key, iv,region)
-                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                        if uid3:
-                                            H = await Emote_k(uid3, idT, key, iv,region)
-                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                        if uid4:
-                                            H = await Emote_k(uid4, idT, key, iv,region)
-                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                        if uid5:
-                                            H = await Emote_k(uid5, idT, key, iv,region)
-                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                        
+                                    except Exception:
+                                        idT = len(parts) - 1
+                                        idT = int(parts[idT])
+                                        print(idT)
+                                        print(uid)
 
-                                    except Exception as e:
-                                        pass
+                                    if not s:
+                                        try:
+                                            await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+
+                                            H = await Emote_k(uid, idT, key, iv,region)
+                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+
+                                            if uid2:
+                                                H = await Emote_k(uid2, idT, key, iv,region)
+                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                            if uid3:
+                                                H = await Emote_k(uid3, idT, key, iv,region)
+                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                            if uid4:
+                                                H = await Emote_k(uid4, idT, key, iv,region)
+                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                            if uid5:
+                                                H = await Emote_k(uid5, idT, key, iv,region)
+                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+
+
+                                        except Exception as e:
+                                            pass
+                                except Exception as e:
+                                    print('Error handling @a command:', e)
 
 
                         if inPuTMsG in ("hi" , "/help" , "start" , "help"):
