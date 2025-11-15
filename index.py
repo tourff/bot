@@ -26,10 +26,44 @@ spam_uid = None
 Spy = False
 Chat_Leave = False
 #------------------------------------------#
- 
+
+# ----------------- NEW GLOBAL CONFIG / STATE -----------------
+# Admin list (UID ints) — কাস্টমাইজ করো
+ADMIN_UIDS = {2172143722}
+
+# Cooldown infra: dict of (uid, cmd) -> last_ts
+_command_cooldowns = {}  # key: (uid, cmd) value: ts
+DEFAULT_COOLDOWNS = {
+    '/help': 2,
+    '/profile': 3,
+    '/claninfo': 3,
+    '/guildinfo': 3,
+    '/announce': 5,
+    '/burst': 60,
+    '/slowmode': 2,
+    '/fastburst-sim': 5,
+}
+
+# Slowmode (group level)
+SLOWMODE_ENABLED = False
+SLOWMODE_INTERVAL = 10        # seconds default
+_slowmode_last = {}           # chat_id -> {uid -> last_ts}
+SLOWMODE_ADMINS = set(ADMIN_UIDS)
+
+# Emote burst settings (controlled)
+EMOTE_BURST_MAX = 5            # সর্বোচ্চ এমোট সংখ্যা একবারে
+EMOTE_BURST_MIN_DELAY = 1.0    # ন্যূনতম delay (s)
+EMOTE_BURST_COOLDOWN = 60      # প্রতি admin cooldown (s)
+_emote_burst_cooldowns = {}    # admin_uid -> last_ts
+
+# Dry-run flag (optional)
+DRY_RUN = False
+
+# ------------------------------------------------------------
+
 ####################################
 
-#Clan-info-by-clan-id
+# --- Updated Get_clan_info: show "GUILD INFO" heading ---
 def Get_clan_info(clan_id):
     try:
         url = f"https://get-clan-info.vercel.app/get_clan_info?clan_id={clan_id}"
@@ -39,25 +73,25 @@ def Get_clan_info(clan_id):
             msg = f""" 
 [11EAFD][b][c]
 °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-▶▶▶▶GUILD DETAILS◀◀◀◀
-Achievements: {data['achievements']}\n\n
-Balance : {fix_num(data['balance'])}\n\n
-Clan Name : {data['clan_name']}\n\n
-Expire Time : {fix_num(data['guild_details']['expire_time'])}\n\n
-Members Online : {fix_num(data['guild_details']['members_online'])}\n\n
-Regional : {data['guild_details']['regional']}\n\n
-Reward Time : {fix_num(data['guild_details']['reward_time'])}\n\n
-Total Members : {fix_num(data['guild_details']['total_members'])}\n\n
-ID : {fix_num(data['id'])}\n\n
-Last Active : {fix_num(data['last_active'])}\n\n
-Level : {fix_num(data['level'])}\n\n
-Rank : {fix_num(data['rank'])}\n\n
-Region : {data['region']}\n\n
-Score : {fix_num(data['score'])}\n\n
-Timestamp1 : {fix_num(data['timestamp1'])}\n\n
-Timestamp2 : {fix_num(data['timestamp2'])}\n\n
-Welcome Message: {data['welcome_message']}\n\n
-XP: {fix_num(data['xp'])}\n\n
+▶▶▶▶ GUILD INFO ◀◀◀◀
+Achievements: {data.get('achievements')}\n\n
+Balance : {fix_num(data.get('balance',0))}\n\n
+Guild/Clan Name : {data.get('clan_name')}\n\n
+Expire Time : {fix_num(data.get('guild_details',{}).get('expire_time',0))}\n\n
+Members Online : {fix_num(data.get('guild_details',{}).get('members_online',0))}\n\n
+Regional : {data.get('guild_details',{}).get('regional')}\n\n
+Reward Time : {fix_num(data.get('guild_details',{}).get('reward_time',0))}\n\n
+Total Members : {fix_num(data.get('guild_details',{}).get('total_members',0))}\n\n
+ID : {fix_num(data.get('id',0))}\n\n
+Last Active : {fix_num(data.get('last_active',0))}\n\n
+Level : {fix_num(data.get('level',0))}\n\n
+Rank : {fix_num(data.get('rank',0))}\n\n
+Region : {data.get('region')}\n\n
+Score : {fix_num(data.get('score',0))}\n\n
+Timestamp1 : {fix_num(data.get('timestamp1',0))}\n\n
+Timestamp2 : {fix_num(data.get('timestamp2',0))}\n\n
+Welcome Message: {data.get('welcome_message')}\n\n
+XP: {fix_num(data.get('xp',0))}\n\n
 °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 [FFB300][b][c]MADE BY ALAMINgaming.90
             """
@@ -66,14 +100,16 @@ XP: {fix_num(data['xp'])}\n\n
             msg = """
 [11EAFD][b][c]
 °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-Failed to get info, please try again later!!
+Failed to get guild info, please try again later!!
 
 °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 [FFB300][b][c]MADE BY TURJO 
             """
             return msg
-    except:
-        pass
+    except Exception as e:
+        print("Get_clan_info error:", e)
+        return "[FF0000]Error fetching guild info."
+
 #GET INFO BY PLAYER ID
 def get_player_info(player_id):
     url = f"https://like2.vercel.app/player-info?uid={player_id}&server={server2}&key={key2}"
@@ -279,6 +315,36 @@ def get_random_color():
         "[FAEBD7]"
     ]
     return random.choice(colors)
+
+# ----------------- Helper functions for new features -----------------
+def is_admin(uid):
+    try:
+        return int(uid) in ADMIN_UIDS
+    except:
+        return False
+
+def check_cooldown(uid, cmd):
+    key = (int(uid), cmd)
+    last = _command_cooldowns.get(key, 0)
+    cd = DEFAULT_COOLDOWNS.get(cmd, 2)
+    now = time.time()
+    if now - last < cd:
+        return False, int(cd - (now - last))
+    return True, 0
+
+def set_cooldown(uid, cmd):
+    key = (int(uid), cmd)
+    _command_cooldowns[key] = time.time()
+
+async def send_text_message(chat_type, message, uid, chat_id, key, iv):
+    # wrapper to build and send a text message using existing SEndMsG/SEndPacKeT
+    try:
+        P = await SEndMsG(chat_type, message, uid, chat_id, key, iv)
+        await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+    except Exception as e:
+        print("send_text_message error:", e)
+
+# --------------------------------------------------------------------
 
 async def encrypted_proto(encoded_hex):
     key = b'Yg&tc%DEuh6%Zc^8'
@@ -539,68 +605,265 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
 
 
                     if response:
-                        # /5 command: allow in squad (chat_type==0) and clan (chat_type==1); handle private separately
+                        # --- SLOWMODE ENFORCEMENT (applies to group chats only) ---
+                        if SLOWMODE_ENABLED and response.Data.chat_type in (0,1):
+                            now = time.time()
+                            chat_map = _slowmode_last.setdefault(chat_id, {})
+                            last = chat_map.get(response.Data.uid, 0)
+                            if now - last < SLOWMODE_INTERVAL:
+                                wait = int(SLOWMODE_INTERVAL - (now - last))
+                                warn = f"[FF0000]Slowmode active. Please wait {wait}s before sending again."
+                                P = await SEndMsG(response.Data.chat_type, warn, uid, chat_id, key, iv)
+                                await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+                                # skip processing this message
+                                continue
+                            else:
+                                chat_map[response.Data.uid] = now
+
+                        # basic cooldown check for simple commands (per user)
+                        # check for help/profile/claninfo etc.
+                        if inPuTMsG.strip().split():
+                            base_cmd = inPuTMsG.strip().split()[0]
+                        else:
+                            base_cmd = ''
+
+                        # If command has cooldown, enforce it
+                        if base_cmd in DEFAULT_COOLDOWNS:
+                            ok, wait = check_cooldown(response.Data.uid, base_cmd)
+                            if not ok:
+                                msg = f"[FF0000]Please wait {wait}s before using {base_cmd} again."
+                                P = await SEndMsG(response.Data.chat_type, msg, uid, chat_id, key, iv)
+                                await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+                                continue
+                            else:
+                                set_cooldown(response.Data.uid, base_cmd)
+
+                        # /help handler (improved)
+                        if inPuTMsG in ("hi" , "/help" , "start" , "help") or inPuTMsG.startswith('/help '):
+                            uid = response.Data.uid
+                            chat_id = response.Data.Chat_ID
+                            # improved help template
+                            help_msg = (
+                                "[FF2400][b][c]✨  TURJO HACKER ✨[c]\n"
+                                "[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n"
+                                "[00FF00]🎮 ⚡EMOTE COMMANDS⚡:[c]\n"
+                                "[FFFF00]@a [uid] [emote-id][c] - Perform Emote (group only)\n"
+                                "[FFFF00]/x/ [team code][c] - Invite BOT\n"
+                                "[FFFF00]/5[c] - 5 Player Squad (group)\n"
+                                "[FFFF00]/solo[c] - Leave Squad\n"
+                                "[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n"
+                                "[00BFFF]🔍 ©️UTILITY:[c]\n"
+                                "[FFFF00]/profile [uid][c] - Player Profile\n"
+                                "[FFFF00]/guildinfo [clan_id][c] - Guild Info\n"
+                                "[FFFF00]/announce [message][c] - Admin only: Post announcement\n"
+                                "[FFFF00]/slowmode on/off [seconds][c] - Admin only: Toggle group slowmode\n"
+                                "[FFFF00]/burst <uid> <emote_id> <count> <delay>[c] - Admin only: controlled emote burst\n"
+                                "[FFFF00]/fastburst-sim <uid> <emote_id>[c] - Admin only: simulated fast 20x emote (text only)\n"
+                                "[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n"
+                                "[FF69B4]⚡ Safe & Legit Bot\n"
+                                "[FF0000]নিয়ম:- [00FF00]প্রতি সপ্তাহে 1000 গ্লোরি না করলে গিল্ড থেকে কিক দেওয়া হবে\n"
+                            )
+                            P = await SEndMsG(response.Data.chat_type , help_msg , uid , chat_id , key , iv)
+                            await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
+                            continue
+
+                        # /profile handler -> uses newinfo()
+                        if inPuTMsG.startswith('/profile'):
+                            parts = inPuTMsG.strip().split()
+                            if len(parts) < 2:
+                                msg = "[FF0000]Usage: /profile <uid>"
+                                await send_text_message(response.Data.chat_type, msg, uid, chat_id, key, iv)
+                            else:
+                                try:
+                                    target_uid = parts[1]
+                                    info = newinfo(target_uid)
+                                    if isinstance(info, dict) and info.get('status') == 'ok':
+                                        data = info['data']
+                                        # format a simple profile summary (customize as you like)
+                                        basic = data.get('basicInfo') or data
+                                        name = basic.get('nickname', 'N/A') if isinstance(basic, dict) else 'N/A'
+                                        level = basic.get('level', 'N/A') if isinstance(basic, dict) else basic.get('level','N/A')
+                                        likes = basic.get('likes', 'N/A') if isinstance(basic, dict) else basic.get('likes','N/A')
+                                        profile_msg = f"[00FF00]Player: {name}\n[FFFFFF]UID: {target_uid}\n[00BFFF]Level: {level}\n[FFFF00]Likes: {likes}"
+                                        await send_text_message(response.Data.chat_type, profile_msg, uid, chat_id, key, iv)
+                                    elif isinstance(info, dict) and info.get('status') == 'error':
+                                        await send_text_message(response.Data.chat_type, f"[FF0000]{info.get('message')}", uid, chat_id, key, iv)
+                                    else:
+                                        await send_text_message(response.Data.chat_type, "[FF0000]Failed to fetch profile.", uid, chat_id, key, iv)
+                                except Exception as e:
+                                    print("profile error:", e)
+                                    await send_text_message(response.Data.chat_type, "[FF0000]Error fetching profile.", uid, chat_id, key, iv)
+                            continue
+
+                        # /guildinfo or /claninfo handler
+                        if inPuTMsG.startswith('/claninfo') or inPuTMsG.startswith('/guildinfo'):
+                            parts = inPuTMsG.strip().split()
+                            if len(parts) >= 2:
+                                try:
+                                    clan_id = parts[1]
+                                    msg = Get_clan_info(clan_id)
+                                    await send_text_message(response.Data.chat_type, msg, uid, chat_id, key, iv)
+                                except Exception as e:
+                                    print("clan/guild info error:", e)
+                                    await send_text_message(response.Data.chat_type, "[FF0000]Error fetching guild info.", uid, chat_id, key, iv)
+                            else:
+                                # try using LoGinDaTaUncRypTinG.Clan_ID if present
+                                try:
+                                    if LoGinDaTaUncRypTinG and getattr(LoGinDaTaUncRypTinG, 'Clan_ID', None):
+                                        clan_id = LoGinDaTaUncRypTinG.Clan_ID
+                                        msg = Get_clan_info(clan_id)
+                                        await send_text_message(response.Data.chat_type, msg, uid, chat_id, key, iv)
+                                    else:
+                                        await send_text_message(response.Data.chat_type, "[FF0000]Please specify a guild id: /guildinfo <id>", uid, chat_id, key, iv)
+                                except Exception as e:
+                                    print("claninfo fallback error:", e)
+                                    await send_text_message(response.Data.chat_type, "[FF0000]Error fetching guild info.", uid, chat_id, key, iv)
+                            continue
+
+                        # /announce (admin only)
+                        if inPuTMsG.startswith('/announce'):
+                            caller = response.Data.uid
+                            if not is_admin(caller):
+                                await send_text_message(response.Data.chat_type, "[FF0000]Only admins can use /announce.", uid, chat_id, key, iv)
+                            else:
+                                parts = inPuTMsG.strip().split(maxsplit=1)
+                                if len(parts) < 2:
+                                    await send_text_message(response.Data.chat_type, "[FF0000]Usage: /announce <message>", uid, chat_id, key, iv)
+                                else:
+                                    ann = parts[1]
+                                    # send announcement to clan (chat_type=1) if in clan, else to current chat
+                                    target_chat_type = response.Data.chat_type if response.Data.chat_type in (0,1) else 1
+                                    await send_text_message(target_chat_type, f"[FFB300][b][c]ANNOUNCEMENT:\n{ann}", uid, chat_id, key, iv)
+                            continue
+
+                        # /slowmode on/off [seconds] (admin)
+                        if inPuTMsG.strip().startswith('/slowmode'):
+                            caller = response.Data.uid
+                            if not is_admin(caller):
+                                await send_text_message(response.Data.chat_type, "[FF0000]Only admins can change slowmode.", uid, chat_id, key, iv)
+                            else:
+                                parts = inPuTMsG.strip().split()
+                                if len(parts) >= 2 and parts[1].lower() == 'on':
+                                    try:
+                                        sec = int(parts[2]) if len(parts) >= 3 else SLOWMODE_INTERVAL
+                                        # set global slowmode (could be extended to per-chat)
+                                        globals()['SLOWMODE_INTERVAL'] = max(1, sec)
+                                        globals()['SLOWMODE_ENABLED'] = True
+                                        await send_text_message(response.Data.chat_type, f"[00FF00]Slowmode enabled: {SLOWMODE_INTERVAL}s per user.", uid, chat_id, key, iv)
+                                    except Exception:
+                                        await send_text_message(response.Data.chat_type, "[FF0000]Usage: /slowmode on <seconds>", uid, chat_id, key, iv)
+                                elif len(parts) >= 2 and parts[1].lower() == 'off':
+                                    globals()['SLOWMODE_ENABLED'] = False
+                                    await send_text_message(response.Data.chat_type, "[00FF00]Slowmode disabled.", uid, chat_id, key, iv)
+                                else:
+                                    await send_text_message(response.Data.chat_type, "[FF0000]Usage: /slowmode on <seconds>  or  /slowmode off", uid, chat_id, key, iv)
+                            continue
+
+                        # /burst controlled emote burst (admin only)
+                        if inPuTMsG.strip().startswith(('/burst', '/emoteburst')):
+                            parts = inPuTMsG.strip().split()
+                            caller_uid = response.Data.uid
+                            if caller_uid not in ADMIN_UIDS:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Only admins can run /burst.", uid, chat_id, key, iv)
+                                continue
+                            if response.Data.chat_type == 2:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Use this command in Squad or Clan chat (not private).", uid, chat_id, key, iv)
+                                continue
+                            if len(parts) < 4:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Usage: /burst <target_uid> <emote_id> <count> <delay>", uid, chat_id, key, iv)
+                                continue
+                            try:
+                                target_uid = int(parts[1])
+                                emote_id = int(parts[2])
+                                requested_count = int(parts[3])
+                                delay = float(parts[4]) if len(parts) >= 5 else 1.0
+
+                                count = min(max(1, requested_count), EMOTE_BURST_MAX)
+                                delay = max(delay, EMOTE_BURST_MIN_DELAY)
+
+                                now = time.time()
+                                last = _emote_burst_cooldowns.get(caller_uid, 0)
+                                if now - last < EMOTE_BURST_COOLDOWN:
+                                    wait = int(EMOTE_BURST_COOLDOWN - (now - last))
+                                    await send_text_message(response.Data.chat_type, f"[FF0000]Please wait {wait}s before running /burst again.", uid, chat_id, key, iv)
+                                    continue
+                                _emote_burst_cooldowns[caller_uid] = now
+                                await send_text_message(response.Data.chat_type, f"[00FF00]Starting emote burst: {count}x emote {emote_id} to {target_uid} with {delay}s delay.", uid, chat_id, key, iv)
+
+                                # perform burst but limited
+                                for i in range(count):
+                                    try:
+                                        H = await Emote_k(target_uid, emote_id, key, iv, region)
+                                        await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                    except Exception as e:
+                                        print(f"Emote burst iteration error: {e}")
+                                    await asyncio.sleep(delay)
+
+                                await send_text_message(response.Data.chat_type, f"[00FF00]Emote burst completed ({count} times).", uid, chat_id, key, iv)
+                            except ValueError:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Invalid arguments. UIDs and emote_id and count must be numbers.", uid, chat_id, key, iv)
+                            except Exception as e:
+                                print("Unexpected /burst error:", e)
+                                await send_text_message(response.Data.chat_type, "[FF0000]An error occurred running /burst.", uid, chat_id, key, iv)
+                            continue
+
+                        # --- Safe simulated fast burst: /fastburst-sim <target_uid> <emote_id> ---
+                        # This is TEXT-ONLY representation (no real emote packets). Admin-only.
+                        if inPuTMsG.strip().startswith('/fastburst-sim'):
+                            parts = inPuTMsG.strip().split()
+                            caller = response.Data.uid
+                            if caller not in ADMIN_UIDS:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Only admins can use /fastburst-sim.", uid, chat_id, key, iv)
+                                continue
+                            if len(parts) < 3:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Usage: /fastburst-sim <target_uid> <emote_id>", uid, chat_id, key, iv)
+                                continue
+                            try:
+                                target_uid = int(parts[1])
+                                emote_id = parts[2]
+                                # build a simulated line repeating the emote tag 20 times (text only)
+                                rep = " ".join([f"[EMOTE:{emote_id}]" for _ in range(20)])
+                                sim_msg = f"[00BFFF]Simulated fast emote x20 to {target_uid}:\n{rep}"
+                                await send_text_message(response.Data.chat_type, sim_msg, uid, chat_id, key, iv)
+                            except ValueError:
+                                await send_text_message(response.Data.chat_type, "[FF0000]Invalid UID.", uid, chat_id, key, iv)
+                            continue
+
+                        # Existing handlers from original file (e.g., /5, /x/, @a, /solo, /s, help message, etc.)
                         if inPuTMsG.startswith(("/5")):
                             try:
-                                if response.Data.chat_type == 2:
-                                    # private: existing private behaviour
-                                    dd = chatdata.get('5', {}).get('data', {}).get('16')
-                                    print('msg in private')
-                                    message = f"[B][C][000000]❄️Done\n\n"
-                                    P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
-                                    PAc = await OpEnSq(key , iv,region)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
-                                    C = await cHSq(5, uid ,key, iv,region)
-                                    await asyncio.sleep(0.5)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
-                                    V = await SEnd_InV(5 , uid , key , iv,region)
-                                    await asyncio.sleep(0.5)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
-                                    E = await ExiT(None , key , iv)
-                                    await asyncio.sleep(3)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
-                                else:
-                                    # group (squad or clan): treat same as squad behaviour (if any different, adjust here)
-                                    print('msg in group (squad/clan)')
-                                    # If original code had different squad behavior, incorporate here. For now, reuse private flow.
-                                    message = f"[B][C][000000]❄️Done\n\n"
-                                    P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
-                                    PAc = await OpEnSq(key , iv,region)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
-                                    C = await cHSq(5, uid ,key, iv,region)
-                                    await asyncio.sleep(0.5)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
-                                    V = await SEnd_InV(5 , uid , key , iv,region)
-                                    await asyncio.sleep(0.5)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
-                                    E = await ExiT(None , key , iv)
-                                    await asyncio.sleep(3)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
-                            except Exception as e:
-                                print('Error handling /5:', e)
+                                dd = chatdata['5']['data']['16']
+                                print('msg in private')
+                                message = f"[B][C][000000]❄️Done\n\n"
+                                P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
+                                await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
+                                PAc = await OpEnSq(key , iv,region)
+                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , PAc)
+                                C = await cHSq(5, uid ,key, iv,region)
+                                await asyncio.sleep(0.5)
+                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , C)
+                                V = await SEnd_InV(5 , uid , key , iv,region)
+                                await asyncio.sleep(0.5)
+                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , V)
+                                E = await ExiT(None , key , iv)
+                                await asyncio.sleep(3)
+                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , E)
+                            except:
+                                print('msg in squad')
 
 
 
-                        # /x/ invite code: allow in clan & squad (group); private handled separately (if needed)
                         if inPuTMsG.startswith('/x/'):
                             CodE = inPuTMsG.split('/x/')[1]
                             try:
-                                if response.Data.chat_type == 2:
-                                    # private: existing behavior for private (if any)
-                                    dd = chatdata.get('5', {}).get('data', {}).get('16')
-                                    print('msg in private')
-                                    EM = await GenJoinSquadsPacket(CodE , key , iv)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
-                                else:
-                                    # group (squad/clan)
-                                    print('msg in group (squad/clan)')
-                                    EM = await GenJoinSquadsPacket(CodE , key , iv)
-                                    await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
-                            except Exception as e:
-                                print('Error handling /x/:', e)
+                                dd = chatdata['5']['data']['16']
+                                print('msg in private')
+                                EM = await GenJoinSquadsPacket(CodE , key , iv)
+                                await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
 
+
+                            except:
+                                print('msg in squad')
 
                         if inPuTMsG.startswith('/solo'):
                             leave = await ExiT(uid,key,iv)
@@ -610,70 +873,68 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
                             EM = await FS(key , iv)
                             await SEndPacKeT(whisper_writer , online_writer , 'OnLine' , EM)
 
-                        # @a emote command: allow in squad (0) and clan (1), block only in private (2)
                         if inPuTMsG.strip().startswith('@a'):
 
-                            if response.Data.chat_type == 2:
-                                # private: inform that this command should be used in squad/clan
+                            try:
+                                dd = chatdata['5']['data']['16']
                                 print('msg in private')
-                                message = f"[B][C][000000]\n\nOnly In Squad/Clan ! \n\n"
+                                message = f"[B][C][000000]\n\nOnly In Squad ! \n\n"
                                 P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
                                 await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
-                            else:
-                                # group (squad or clan): perform emote command same as previous squad logic
+
+                            except:
+                                print('msg in squad')
+
+                                parts = inPuTMsG.strip().split()
+                                print(response.Data.chat_type, uid, chat_id)
+                                message = f'[B][C]{get_random_color()}\nEMOTE STARTED-> {xMsGFixinG(uid)}\n'
+
+                                P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
+
+                                uid2 = uid3 = uid4 = uid5 = None
+                                s = False
+
                                 try:
-                                    parts = inPuTMsG.strip().split()
-                                    print(response.Data.chat_type, uid, chat_id)
-                                    message = f'[B][C]{get_random_color()}\nEMOTE STARTED-> {xMsGFixinG(uid)}\n'
+                                    uid = int(parts[1])
+                                    uid2 = int(parts[2])
+                                    uid3 = int(parts[3])
+                                    uid4 = int(parts[4])
+                                    uid5 = int(parts[5])
+                                    idT = int(parts[5])
 
-                                    P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
+                                except ValueError as ve:
+                                    print("ValueError:", ve)
+                                    s = True
 
-                                    uid2 = uid3 = uid4 = uid5 = None
-                                    s = False
+                                except Exception:
+                                    idT = len(parts) - 1
+                                    idT = int(parts[idT])
+                                    print(idT)
+                                    print(uid)
 
+                                if not s:
                                     try:
-                                        uid = int(parts[1])
-                                        uid2 = int(parts[2])
-                                        uid3 = int(parts[3])
-                                        uid4 = int(parts[4])
-                                        uid5 = int(parts[5])
-                                        idT = int(parts[5])
+                                        await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
 
-                                    except ValueError as ve:
-                                        print("ValueError:", ve)
-                                        s = True
+                                        H = await Emote_k(uid, idT, key, iv,region)
+                                        await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
 
-                                    except Exception:
-                                        idT = len(parts) - 1
-                                        idT = int(parts[idT])
-                                        print(idT)
-                                        print(uid)
-
-                                    if not s:
-                                        try:
-                                            await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
-
-                                            H = await Emote_k(uid, idT, key, iv,region)
+                                        if uid2:
+                                            H = await Emote_k(uid2, idT, key, iv,region)
                                             await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                        if uid3:
+                                            H = await Emote_k(uid3, idT, key, iv,region)
+                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                        if uid4:
+                                            H = await Emote_k(uid4, idT, key, iv,region)
+                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                        if uid5:
+                                            H = await Emote_k(uid5, idT, key, iv,region)
+                                            await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+                                        
 
-                                            if uid2:
-                                                H = await Emote_k(uid2, idT, key, iv,region)
-                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                            if uid3:
-                                                H = await Emote_k(uid3, idT, key, iv,region)
-                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                            if uid4:
-                                                H = await Emote_k(uid4, idT, key, iv,region)
-                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-                                            if uid5:
-                                                H = await Emote_k(uid5, idT, key, iv,region)
-                                                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
-
-
-                                        except Exception as e:
-                                            pass
-                                except Exception as e:
-                                    print('Error handling @a command:', e)
+                                    except Exception as e:
+                                        pass
 
 
                         if inPuTMsG in ("hi" , "/help" , "start" , "help"):
