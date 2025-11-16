@@ -9,8 +9,8 @@ from Pb2 import DEcwHisPErMsG_pb2 , MajoRLoGinrEs_pb2 , PorTs_pb2 , MajoRLoGinrE
 from cfonts import render, say
 
 
-#EMOTES BY  ALAMIN 
-# FIXED BY  ALAMIN 
+#EMOTES BY  TURJO 
+# FIXED BY  TURJO 
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)  
@@ -649,7 +649,7 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
                         if inPuTMsG in ("hi" , "/help" , "start" , "help"):
                             uid = response.Data.uid
                             chat_id = response.Data.Chat_ID
-                            message = '[FF2400][b][c]✨  TURJO ✨[c]\n[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n[00FF00]🎮 ⚡EMOTE COMMANDS⚡:[c]t\n[FFFF00]@a [uid] [emote-id][c] - Perform Emote\n[FFFF00]/x/ [team code][c] - Invite BOT \n[FFFF00]/5[c] - 5 Player Squad\n[FFFF00]/solo[c] - Leave Squad\n[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n[00BFFF]🔍 ©️PAID COMMANDS:[c]\n[FFFF00]/info [id][c] - Player Info\n[FFFF00]/like [id][c] - Send Likes\n[FFFF00]/visit [id][c] - Send Visits\n[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n[FF69B4]⚡ Safe & Legit Bot\n\n[FF0000]নিয়ম:- [00FF00]প্রতি সপ্তাহে 1000 গ্লোরি না করলে গিল্ড থেকে কিক দেওয়া হবে\n\n[FF0000]RULES:- [00FF00]In Every Week, If You Not Complete 1000 Glory, I Will Kick You From Guild'
+                            message = '[FF2400][b][c]✨  TURJO ✨[c]\n[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n[00FF00]🎮 ⚡EMOTE COMMANDS⚡:[c]\n[FFFF00]@a [uid] [emote-id][c] - Perform Emote\n[FFFF00]/x/ [team code][c] - Invite BOT \n[FFFF00]/5[c] - 5 Player Squad\n[FFFF00]/solo[c] - Leave Squad\n [FFFF00]/info [id][c] - Player Info\n[FFFF00]/like [id][c] - Send Likes\n[FFFF00]/visit [id][c] - Send Visits\n[FFFFFF]━━━━━━━━━━━━━━━━━━━━[c]\n[FF69B4]⚡ Safe & Legit Bot\n\n[FF0000]RULES:- [00FF00]In Every Week, If You Not Complete 1000 Glory, I Will Kick You From Guild'
                             P = await SEndMsG(response.Data.chat_type , message , uid , chat_id , key , iv)
                             await SEndPacKeT(whisper_writer , online_writer , 'ChaT' , P)
                         response = None
@@ -662,7 +662,7 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
         await asyncio.sleep(reconnect_delay)
 
 async def MaiiiinE():
-    Uid , Pw = '4279335658','31EDD7EAF5C6A2C73A22569AC52A1C6908D0BE551B91BF373CB0AD3CE6021723'
+    Uid , Pw = '4291462207','05D3EE99A3B46B2932CD8140D59898C4441BF82340D77DF0B3256D7682435157'
     
 
     open_id , access_token = await GeNeRaTeAccEss(Uid , Pw)
