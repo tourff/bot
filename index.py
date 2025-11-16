@@ -69,7 +69,7 @@ XP: {fix_num(data['xp'])}\n\n
 Failed to get info, please try again later!!
 
 °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-[FFB300][b][c]MADE BY  ALAMIN 
+[FFB300][b][c]MADE BY  TURJO 
             """
             return msg
     except:
@@ -584,12 +584,40 @@ async def TcPChaT(ip, port, AutHToKen, key, iv, LoGinDaTaUncRypTinG, ready_event
 
                         if inPuTMsG.strip().startswith('@a'):
 
-                            try:
-                                dd = chatdata['5']['data']['16']
-                                print('msg in private')
-                                message = f"[B][C][000000]\n\nOnly In Squad ! \n\n"
-                                P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
-                                await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+    # ALLOW for Squad (0) AND Guild/Clan (1)
+    if response.Data.chat_type in [0, 1]:  
+        parts = inPuTMsG.strip().split()
+        message = f'[B][C]{get_random_color()}\nEMOTE STARTED-> {xMsGFixinG(uid)}\n'
+
+        P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
+        await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+
+        # Extract all UIDs
+        ids = []
+        for p in parts[1:]:
+            try:
+                ids.append(int(p))
+            except:
+                pass
+
+        if len(ids) < 2:
+            continue
+
+        target_emote = ids[-1]
+
+        for target_uid in ids[:-1]:
+            try:
+                H = await Emote_k(target_uid, target_emote, key, iv, region)
+                await SEndPacKeT(whisper_writer, online_writer, 'OnLine', H)
+            except:
+                pass
+
+    else:
+        # Private chat
+        message = f"[B][C][000000]\n\nOnly In Squad / Guild ! \n\n"
+        P = await SEndMsG(response.Data.chat_type, message, uid, chat_id, key, iv)
+        await SEndPacKeT(whisper_writer, online_writer, 'ChaT', P)
+
 
                             except:
                                 print('msg in squad')
